@@ -25,8 +25,8 @@ platform :android do
       release_status: release_status,
       skip_upload_apk: true,
       skip_upload_metadata: false,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
       skip_upload_changelogs: release_notes.empty?
     )
   end
