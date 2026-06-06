@@ -1,0 +1,1 @@
+Fast jungle runner game with traps, clues, sprint boosts, and route escapes.

@@ -49,3 +49,15 @@ Actions > Build and Upload kajakaja to Google Play > Run workflow
 Set `upload_to_play` to `yes` only after the Google Play app record, service account, and signing secrets are ready.
 
 Important: the saloon Google Play service account can upload kajakaja only after Play Console grants it release access for `com.kajakaja.game`.
+
+## Play Console App Content
+
+Google Play Console may block saving/review until the App content forms are complete.
+
+For the health declaration, use the non-health-app answer:
+
+```text
+kajakaja is not a health app and does not include health, medical, fitness, wellness, diagnosis, treatment, health data collection, or health tracking features.
+```
+
+This declaration is completed in Play Console, not through the Android APK/AAB.
