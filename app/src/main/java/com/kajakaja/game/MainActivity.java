@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         private static final int MODE_GAME_OVER = 3;
 
         private static final int TYPE_TRAP = 0;
-        private static final int TYPE_SAMOSA = 1;
+        private static final int TYPE_CHARM = 1;
         private static final int TYPE_CLUE = 2;
         private static final int TYPE_GATE = 3;
         private static final int TYPE_BLOCK = 4;
@@ -124,7 +124,7 @@ public class MainActivity extends Activity {
         private int lane = 1;
         private int targetLane = 1;
         private int score = 0;
-        private int samosas = 0;
+        private int magicTokens = 0;
         private int clues = 0;
         private int blockers = 0;
         private int routeAnswer = 1;
@@ -214,8 +214,7 @@ public class MainActivity extends Activity {
                         danger += 0.19f;
                         dash = 0f;
                         flash = 0.22f;
-                    } else if (e.type == TYPE_SAMOSA) {
-                        samosas++;
+                    } else if (e.type == TYPE_CHARM) {
                         score += 80;
                         dash = Math.min(1f, dash + 0.18f);
                         danger = Math.max(0.06f, danger - 0.045f);
@@ -233,6 +232,7 @@ public class MainActivity extends Activity {
                     chosenRoute = route;
                     if (route == routeAnswer && clues >= requiredClues() && blockers >= requiredBlockers()) {
                         score += 700 + level * 150;
+                        magicTokens++;
                         danger = Math.max(0.04f, danger - 0.22f);
                         mode = MODE_LEVEL_CLEAR;
                         levelPause = 1.15f;
@@ -262,7 +262,7 @@ public class MainActivity extends Activity {
             }
             if (random.nextFloat() < 0.72f) {
                 int l = random.nextInt(3);
-                entities.add(new Entity(TYPE_SAMOSA, w + 260f + random.nextInt(180), laneY(l), l));
+                entities.add(new Entity(TYPE_CHARM, w + 260f + random.nextInt(180), laneY(l), l));
             }
             if (clues < requiredClues() && random.nextFloat() < 0.48f) {
                 int l = random.nextInt(3);
@@ -290,7 +290,7 @@ public class MainActivity extends Activity {
             mode = MODE_RUN;
             level = 1;
             score = 0;
-            samosas = 0;
+            magicTokens = 0;
             failureReason = "Caught by the danger";
             setupLevel();
         }
@@ -325,8 +325,17 @@ public class MainActivity extends Activity {
                 downX = e.getX();
                 downY = e.getY();
                 downTime = System.currentTimeMillis();
-                if (mode == MODE_TITLE || mode == MODE_GAME_OVER) {
+                if (mode == MODE_TITLE) {
                     startGame();
+                    return true;
+                }
+                if (mode == MODE_GAME_OVER) {
+                    if (magicTokens > 0) {
+                        magicTokens--;
+                        setupLevel();
+                    } else {
+                        startGame();
+                    }
                     return true;
                 }
                 if (mode == MODE_LEVEL_CLEAR) {
@@ -341,13 +350,24 @@ public class MainActivity extends Activity {
                 } else if (System.currentTimeMillis() - downTime < 220) {
                     if (e.getY() < getHeight() * 0.44f) targetLane = clamp(targetLane - 1, 0, 2);
                     else if (e.getY() > getHeight() * 0.58f) targetLane = clamp(targetLane + 1, 0, 2);
-                    else if (samosas > 0) {
-                        samosas--;
-                        dash = 1f;
+                    else if (magicTokens > 0) {
+                        castPathMagic();
                     }
                 }
             }
             return true;
+        }
+
+        private void castPathMagic() {
+            magicTokens--;
+            clues = Math.max(clues, requiredClues());
+            blockers = Math.max(blockers, requiredBlockers());
+            dash = 1f;
+            danger = Math.max(0.03f, danger - 0.24f);
+            flash = 0.12f;
+            if (!hasGate() && world > gateAt - 1300f) {
+                spawnGate();
+            }
         }
 
         private void drawWorld(Canvas c) {
@@ -386,7 +406,7 @@ public class MainActivity extends Activity {
         private void drawEntities(Canvas c) {
             for (Entity e : entities) {
                 if (e.type == TYPE_TRAP) drawTrap(c, e.x, e.y);
-                else if (e.type == TYPE_SAMOSA) drawSamosa(c, e.x, e.y, 28f);
+                else if (e.type == TYPE_CHARM) drawMagicCharm(c, e.x, e.y, 28f);
                 else if (e.type == TYPE_CLUE) drawClue(c, e.x, e.y);
                 else if (e.type == TYPE_BLOCK) drawBlocker(c, e.x, e.y);
                 else drawGate(c, e.x);
@@ -431,7 +451,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        private void drawSamosa(Canvas c, float x, float y, float r) {
+        private void drawMagicCharm(Canvas c, float x, float y, float r) {
             p.setColor(Color.rgb(245, 183, 69));
             Path tri = new Path();
             tri.moveTo(x, y - r);
@@ -444,6 +464,8 @@ public class MainActivity extends Activity {
             p.setStrokeWidth(5f);
             c.drawPath(tri, p);
             p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.argb(150, 255, 240, 120));
+            c.drawCircle(x, y + 4, r * 0.45f, p);
             p.setStrokeWidth(1f);
         }
 
@@ -478,7 +500,7 @@ public class MainActivity extends Activity {
             c.drawText(stageName(), 42, 86, text);
             c.drawText("Level " + level, 260, 54, text);
             c.drawText("Score " + score, 380, 54, text);
-            c.drawText("Samosas " + samosas, 540, 54, text);
+            c.drawText("Magic " + magicTokens, 540, 54, text);
             c.drawText("Clues " + clues + "/" + requiredClues(), 710, 54, text);
             c.drawText("Blocks " + blockers + "/" + requiredBlockers(), 850, 54, text);
             c.drawText("Task: " + objectiveText(), 260, 88, text);
@@ -509,20 +531,20 @@ public class MainActivity extends Activity {
                 c.drawText("kajakaja", w * 0.30f, h * 0.28f, text);
                 text.setTextSize(28f);
                 c.drawText("Survive living forest stages: snakes, ruins, cliffs, and fire.", w / 2f, h * 0.46f, text);
-                c.drawText("Collect clues, carry blockers, seal the threat, then choose the right route.", w / 2f, h * 0.55f, text);
+                c.drawText("Clear stages to earn magic. Tap center to reveal the path or revive.", w / 2f, h * 0.55f, text);
                 text.setTextSize(34f);
                 c.drawText("Tap to run", w / 2f, h * 0.72f, text);
             } else if (mode == MODE_LEVEL_CLEAR) {
                 text.setTextSize(52f);
                 c.drawText("Threat blocked", w / 2f, h * 0.44f, text);
                 text.setTextSize(28f);
-                c.drawText(String.format(Locale.US, "%s opens. Level %d waits.", stageName(), level + 1), w / 2f, h * 0.56f, text);
+                c.drawText(String.format(Locale.US, "Reward +1 magic. %s opens. Level %d waits.", stageName(), level + 1), w / 2f, h * 0.56f, text);
             } else {
                 text.setTextSize(48f);
                 c.drawText(failureReason, w / 2f, h * 0.42f, text);
                 text.setTextSize(30f);
                 c.drawText("Final score " + score + "   Level " + level, w / 2f, h * 0.55f, text);
-                c.drawText("Tap to try again", w / 2f, h * 0.68f, text);
+                c.drawText(magicTokens > 0 ? "Tap to spend magic and retry this stage" : "Tap to try again", w / 2f, h * 0.68f, text);
             }
             text.setTextAlign(Paint.Align.LEFT);
         }

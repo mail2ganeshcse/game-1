@@ -1,13 +1,13 @@
 kajakaja is a fast-paced jungle survival runner game where every second matters.
 
-Run through ancient forest paths, dodge traps, collect glowing samosa sprint boosts, gather clues, and choose the right route gate before the danger catches up from behind.
+Run through ancient forest paths, dodge traps, collect glowing sprint charms, gather clues, and choose the right route gate before the danger catches up from behind.
 
-Each level raises the pressure with faster speed, tighter decisions, and more intense escape moments. Swipe to change lanes, use samosas for burst speed, and read the clues to survive the next route.
+Each level raises the pressure with faster speed, tighter decisions, and more intense escape moments. Swipe to change lanes, clear stages to earn magic rewards, use magic to reveal the safe route or retry a failed stage, and read the clues to survive the next route.
 
 Features:
 - Cinematic jungle escape opening
 - Fast lane-based runner gameplay
-- Traps, clues, route gates, and sprint boosts
+- Traps, clues, route gates, stage rewards, and magic assists
 - Level progression with rising difficulty
 - Simple touch controls built for quick play
 
