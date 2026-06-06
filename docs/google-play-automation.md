@@ -54,6 +54,12 @@ Important: the saloon Google Play service account can upload kajakaja only after
 
 Google Play Console may block saving/review until the App content forms are complete.
 
+Privacy policy URL:
+
+```text
+https://mail2ganeshcse.github.io/game-1/privacy-policy.html
+```
+
 For the health declaration, use the non-health-app answer:
 
 ```text
