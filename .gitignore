@@ -7,3 +7,4 @@ keystore.properties
 upload-keystore.jks
 *.idsig
 fastlane/google-play-service-account.json
+release-artifacts/
