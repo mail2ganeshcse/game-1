@@ -1,0 +1,33 @@
+default_platform(:android)
+
+require "fileutils"
+
+platform :android do
+  desc "Upload a signed kajakaja Android App Bundle to Google Play"
+  lane :deploy_play do |options|
+    track = options[:track] || ENV.fetch("PLAY_TRACK", "alpha")
+    release_status = options[:release_status] || ENV.fetch("PLAY_RELEASE_STATUS", "completed")
+    aab_path = options[:aab_path] || ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab")
+    json_key_path = ENV.fetch("GOOGLE_PLAY_JSON_KEY", "fastlane/google-play-service-account.json")
+    release_notes = (options[:release_notes] || ENV["PLAY_RELEASE_NOTES"] || "").strip
+
+    unless release_notes.empty?
+      changelog_dir = "fastlane/metadata/android/en-US/changelogs"
+      FileUtils.mkdir_p(changelog_dir)
+      File.write(File.join(changelog_dir, "default.txt"), release_notes)
+    end
+
+    upload_to_play_store(
+      package_name: "com.kajakaja.game",
+      json_key: json_key_path,
+      aab: aab_path,
+      track: track,
+      release_status: release_status,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: release_notes.empty?
+    )
+  end
+end

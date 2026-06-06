@@ -1,0 +1,187 @@
+name: Build and Upload kajakaja to Google Play
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android-play-release.yml"
+      - "app/**"
+      - "build.gradle"
+      - "settings.gradle"
+      - "Gemfile"
+      - "fastlane/**"
+  workflow_dispatch:
+    inputs:
+      upload_to_play:
+        description: "Upload to Google Play after building"
+        required: true
+        default: "no"
+        type: choice
+        options:
+          - "no"
+          - "yes"
+      track:
+        description: "Google Play track: internal, alpha, beta, production, or a custom closed-testing track"
+        required: true
+        default: "alpha"
+      release_status:
+        description: "Google Play release status"
+        required: true
+        default: "completed"
+        type: choice
+        options:
+          - completed
+          - draft
+          - inProgress
+      version_code:
+        description: "Optional Android versionCode. Leave blank to use 1000 + GitHub run number."
+        required: false
+        default: ""
+      version_name:
+        description: "Optional Android versionName. Leave blank to use 1.<versionCode>."
+        required: false
+        default: ""
+      release_notes:
+        description: "Release notes shown to testers"
+        required: true
+        default: "kajakaja launch build with cinematic opening art and fast jungle runner gameplay."
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kajakaja-android-release
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Build signed Android APK and AAB
+    runs-on: ubuntu-latest
+    outputs:
+      version_code: ${{ steps.version.outputs.version_code }}
+      version_name: ${{ steps.version.outputs.version_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Resolve Android version
+        id: version
+        shell: bash
+        run: |
+          REQUESTED_VERSION_CODE="${{ github.event.inputs.version_code || '' }}"
+          REQUESTED_VERSION_NAME="${{ github.event.inputs.version_name || '' }}"
+
+          if [ -n "$REQUESTED_VERSION_CODE" ]; then
+            VERSION_CODE="$REQUESTED_VERSION_CODE"
+          else
+            VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          fi
+
+          if [ -n "$REQUESTED_VERSION_NAME" ]; then
+            VERSION_NAME="$REQUESTED_VERSION_NAME"
+          else
+            VERSION_NAME="1.${VERSION_CODE}"
+          fi
+
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "ANDROID_VERSION_CODE=${VERSION_CODE}" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
+
+      - name: Restore upload keystore
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_UPLOAD_KEYSTORE_BASE64"
+          test -n "$ANDROID_UPLOAD_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_UPLOAD_KEY_ALIAS"
+          test -n "$ANDROID_UPLOAD_KEY_PASSWORD"
+
+          echo "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > upload-keystore.jks
+          {
+            echo "storeFile=upload-keystore.jks"
+            echo "storePassword=$ANDROID_UPLOAD_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_UPLOAD_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_UPLOAD_KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build release APK and AAB
+        run: gradle clean bundleRelease assembleRelease
+
+      - name: Verify release APK
+        run: $ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kajakaja-android-${{ steps.version.outputs.version_code }}
+          path: |
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  upload-to-play:
+    name: Await approval and upload to Google Play
+    runs-on: ubuntu-latest
+    needs:
+      - build-android
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_play == 'yes'
+    environment:
+      name: google-play-${{ github.event.inputs.track || 'alpha' }}
+      url: https://play.google.com/console
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: kajakaja-android-${{ needs.build-android.outputs.version_code }}
+          path: app/build/outputs
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Restore Google Play service account
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          test -n "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          Path("fastlane").mkdir(exist_ok=True)
+          Path("fastlane/google-play-service-account.json").write_text(
+              os.environ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"],
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload AAB to Google Play
+        env:
+          PLAY_TRACK: ${{ github.event.inputs.track || 'alpha' }}
+          PLAY_RELEASE_STATUS: ${{ github.event.inputs.release_status || 'completed' }}
+          PLAY_RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'kajakaja launch build with cinematic opening art and fast jungle runner gameplay.' }}
+          GOOGLE_PLAY_JSON_KEY: fastlane/google-play-service-account.json
+          AAB_PATH: app/build/outputs/bundle/release/app-release.aab
+        run: bundle exec fastlane android deploy_play
