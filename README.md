@@ -2,6 +2,8 @@
 
 `kajakaja` is a fast survival runner Android game. The hero runs through a cinematic jungle escape while danger closes in from behind. Change lanes, dodge traps, collect samosas for sprint energy, gather route clues, and pick the correct gate to reach the next level.
 
+Each stage has a different threat and task. Snake Gorge makes the player collect blockers to stop the serpent, Falling Ruins adds a rolling stone rush, Fire Grove pushes a burning wall forward, and Hunter Night sends shadow hunters from behind. Reaching the route gate without enough clues/blockers, or choosing the wrong route, ends the run.
+
 ## Controls
 
 - Swipe up/down or tap the upper/lower screen to change lanes.
