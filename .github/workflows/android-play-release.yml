@@ -9,6 +9,7 @@ on:
       - "app/**"
       - "build.gradle"
       - "settings.gradle"
+      - "gradle.properties"
       - "Gemfile"
       - "fastlane/**"
   workflow_dispatch:
