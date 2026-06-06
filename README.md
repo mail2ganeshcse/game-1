@@ -14,17 +14,17 @@ Each stage has a different threat and task. Snake Gorge makes the player collect
 
 ## Build APK
 
-This repo includes a direct Android SDK build script, so Gradle is optional.
+Use the Gradle Android build for release builds, because the game includes Android dependencies such as Google Mobile Ads.
 
 ```sh
-chmod +x build_apk.sh
-./build_apk.sh
+gradle clean bundleRelease assembleRelease
 ```
 
-The debug APK is created at:
+The release outputs are created at:
 
 ```text
-build/kajakaja-debug.apk
+app/build/outputs/apk/release/app-release.apk
+app/build/outputs/bundle/release/app-release.aab
 ```
 
 Install on a connected device:
@@ -41,7 +41,22 @@ GitHub Actions workflow:
 .github/workflows/android-play-release.yml
 ```
 
-The workflow builds signed APK/AAB artifacts and can upload the AAB to Google Play using the same secret pattern as the saloon app. Details are in:
+Every push to `main` builds signed APK/AAB artifacts and uploads the AAB to Google Play. By default it uploads to the `alpha` track with `draft` status, which is required while the first Google Play store listing/app-content setup is still incomplete.
+
+After Google Play Console setup is complete, set this GitHub repository variable to publish automatically:
+
+```text
+PLAY_RELEASE_STATUS=completed
+```
+
+Optional repository variables:
+
+```text
+PLAY_TRACK=alpha
+PLAY_RELEASE_NOTES=kajakaja automatic pipeline build.
+```
+
+Details are in:
 
 ```text
 docs/google-play-automation.md

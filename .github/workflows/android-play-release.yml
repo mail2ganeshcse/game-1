@@ -15,9 +15,9 @@ on:
   workflow_dispatch:
     inputs:
       upload_to_play:
-        description: "Upload to Google Play after building"
+        description: "Upload to Google Play after building. Pushes to main always upload."
         required: true
-        default: "no"
+        default: "yes"
         type: choice
         options:
           - "no"
@@ -27,9 +27,9 @@ on:
         required: true
         default: "alpha"
       release_status:
-        description: "Google Play release status"
+        description: "Google Play release status. Use draft until first Play Console setup is complete."
         required: true
-        default: "completed"
+        default: "draft"
         type: choice
         options:
           - completed
@@ -138,13 +138,13 @@ jobs:
           retention-days: 30
 
   upload-to-play:
-    name: Await approval and upload to Google Play
+    name: Upload to Google Play
     runs-on: ubuntu-latest
     needs:
       - build-android
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_play == 'yes'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_play == 'yes')
     environment:
-      name: google-play-${{ github.event.inputs.track || 'alpha' }}
+      name: google-play-${{ github.event.inputs.track || vars.PLAY_TRACK || 'alpha' }}
       url: https://play.google.com/console
     steps:
       - name: Checkout
@@ -180,9 +180,9 @@ jobs:
 
       - name: Upload AAB to Google Play
         env:
-          PLAY_TRACK: ${{ github.event.inputs.track || 'alpha' }}
-          PLAY_RELEASE_STATUS: ${{ github.event.inputs.release_status || 'completed' }}
-          PLAY_RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'kajakaja launch build with cinematic opening art and fast jungle runner gameplay.' }}
+          PLAY_TRACK: ${{ github.event.inputs.track || vars.PLAY_TRACK || 'alpha' }}
+          PLAY_RELEASE_STATUS: ${{ github.event.inputs.release_status || vars.PLAY_RELEASE_STATUS || 'draft' }}
+          PLAY_RELEASE_NOTES: ${{ github.event.inputs.release_notes || vars.PLAY_RELEASE_NOTES || 'kajakaja automatic pipeline build.' }}
           GOOGLE_PLAY_JSON_KEY: fastlane/google-play-service-account.json
           AAB_PATH: app/build/outputs/bundle/release/app-release.aab
         run: bundle exec fastlane android deploy_play
