@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cat >&2 <<'EOF'
+The manual Android SDK build script does not support external Maven dependencies such as Google Mobile Ads.
+Use the Gradle/GitHub Actions build for APK/AAB generation after the AdMob integration.
+EOF
+exit 1
+
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SDK_DIR="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 BUILD_TOOLS_VERSION="${BUILD_TOOLS_VERSION:-36.1.0}"

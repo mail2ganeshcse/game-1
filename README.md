@@ -48,3 +48,14 @@ The helper below uploads the saloon keystore/service-account values to this repo
 ```sh
 scripts/set_github_secrets_from_saloon.sh mail2ganeshcse/game-1
 ```
+
+## Ads
+
+The Android project includes Google AdMob banner ads while gameplay is running. It currently uses Google test IDs:
+
+```text
+App ID: ca-app-pub-3940256099942544~3347511713
+Banner Ad Unit ID: ca-app-pub-3940256099942544/9214589741
+```
+
+Replace these with your real AdMob IDs before production monetization.

@@ -17,6 +17,11 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -24,13 +29,49 @@ import java.util.Locale;
 import java.util.Random;
 
 public class MainActivity extends Activity {
+    private static final String TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741";
+
+    private AdView bannerAd;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        setContentView(new KajakajaView(this));
+        FrameLayout root = new FrameLayout(this);
+        KajakajaView gameView = new KajakajaView(this);
+        gameView.setGameStateListener(isRunning -> {
+            if (bannerAd != null) {
+                bannerAd.setVisibility(isRunning ? View.VISIBLE : View.GONE);
+            }
+        });
+
+        root.addView(gameView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        bannerAd = new AdView(this);
+        bannerAd.setAdUnitId(TEST_BANNER_AD_UNIT_ID);
+        bannerAd.setAdSize(AdSize.BANNER);
+        bannerAd.setVisibility(View.GONE);
+        FrameLayout.LayoutParams adParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL);
+        root.addView(bannerAd, adParams);
+
+        setContentView(root);
+        new Thread(() -> MobileAds.initialize(this, initializationStatus -> {})).start();
+        bannerAd.loadAd(new AdRequest.Builder().build());
         hideSystemBars();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (bannerAd != null) {
+            bannerAd.destroy();
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -73,6 +114,8 @@ public class MainActivity extends Activity {
         private final Random random = new Random(7);
         private final List<Entity> entities = new ArrayList<>();
         private final Bitmap openingArt;
+        private GameStateListener gameStateListener;
+        private boolean lastRunningState = false;
 
         private int mode = MODE_TITLE;
         private int level = 1;
@@ -105,6 +148,11 @@ public class MainActivity extends Activity {
             text.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD));
         }
 
+        void setGameStateListener(GameStateListener listener) {
+            gameStateListener = listener;
+            notifyGameState();
+        }
+
         @Override
         protected void onDraw(Canvas c) {
             long now = System.nanoTime();
@@ -122,7 +170,16 @@ public class MainActivity extends Activity {
             drawHero(c);
             drawHud(c);
             drawOverlay(c);
+            notifyGameState();
             postInvalidateOnAnimation();
+        }
+
+        private void notifyGameState() {
+            boolean isRunning = mode == MODE_RUN;
+            if (gameStateListener != null && isRunning != lastRunningState) {
+                lastRunningState = isRunning;
+                gameStateListener.onRunningStateChanged(isRunning);
+            }
         }
 
         private void update(float dt) {
@@ -492,6 +549,10 @@ public class MainActivity extends Activity {
                 this.y = y;
                 this.lane = lane;
             }
+        }
+
+        interface GameStateListener {
+            void onRunningStateChanged(boolean isRunning);
         }
     }
 }
