@@ -1,8 +1,8 @@
 # kajakaja
 
-`kajakaja` is a vertical rescue puzzle Android game. The hero is trapped inside colorful danger rooms with spikes, crushers, tunnels, and locked vaults. Tap matching color blocks to clear clusters, collect the route colors, and move kajakaja safely toward the exit before the danger meter fills.
+`kajakaja` is a vertical HD-style rescue puzzle Android game. The hero is trapped inside colorful danger rooms with spikes, crushers, tunnels, vaults, lasers, rolling stones, water pipes, and final-stage fire traps. Tap matching color blocks to clear clusters, collect the route colors, and move kajakaja safely along the glowing escape path before the danger meter fills.
 
-Each stage has a different trap and visual action. Spike Wall Escape pushes metal spikes toward the hero, Crusher Ceiling lowers a deadly plate, Tunnel Slide adds a fast chute escape, and Locked Candy Vault blocks the exit behind puzzle walls. Clearing a stage earns one magic reward.
+The game now has 10 designed levels. Each level has its own room palette, hazard animation, route requirements, move count, and obstacle density. Clearing a stage earns one magic reward.
 
 ## Controls
 
@@ -11,6 +11,7 @@ Each stage has a different trap and visual action. Spike Wall Escape pushes meta
 - Tap `AI MOVE` to let the built-in action helper choose the best rescue cluster.
 - Tap `MAGIC` to break traps and recover the stage using earned rewards.
 - If a stage fails, tap to spend magic and retry, or restart when no magic remains.
+- Complete all 10 levels to finish the rescue run.
 
 ## Build APK
 
