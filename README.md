@@ -8,10 +8,15 @@ The game now has 10 designed levels. Each level has its own room palette, hazard
 
 - Tap a group of 2 or more matching blocks to clear it.
 - Clear the required route colors and open enough path progress to reach the exit.
+- Tap `Sign in with Google` on the opening screen to save and restore progress.
 - Tap `AI MOVE` to let the built-in action helper choose the best rescue cluster.
 - Tap `MAGIC` to break traps and recover the stage using earned rewards.
 - If a stage fails, tap to spend magic and retry, or restart when no magic remains.
 - Complete all 10 levels to finish the rescue run.
+
+## Progress Save
+
+Google sign-in is used to identify the player and restore the saved level, score, and magic rewards on the same device. Progress is stored locally per Google account.
 
 ## Build APK
 

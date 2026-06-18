@@ -1,6 +1,8 @@
 package com.kajakaja.game;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -23,6 +25,12 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdSize;
 import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,8 +39,14 @@ import java.util.Random;
 
 public class MainActivity extends Activity {
     private static final String TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741";
+    private static final int RC_GOOGLE_SIGN_IN = 7301;
 
     private AdView bannerAd;
+    private KajakajaView gameView;
+    private GoogleSignInClient googleSignInClient;
+    private SharedPreferences progressPrefs;
+    private String accountKey = "guest";
+    private String playerName = "Guest";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,10 +54,27 @@ public class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
+        progressPrefs = getSharedPreferences("kajakaja_progress", MODE_PRIVATE);
+        GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .build();
+        googleSignInClient = GoogleSignIn.getClient(this, signInOptions);
+
         FrameLayout root = new FrameLayout(this);
-        KajakajaView gameView = new KajakajaView(this);
+        gameView = new KajakajaView(this);
         gameView.setGameStateListener(isRunning -> {
             if (bannerAd != null) bannerAd.setVisibility(isRunning ? View.VISIBLE : View.GONE);
+        });
+        gameView.setAccountListener(new KajakajaView.AccountListener() {
+            @Override
+            public void requestGoogleSignIn() {
+                startActivityForResult(googleSignInClient.getSignInIntent(), RC_GOOGLE_SIGN_IN);
+            }
+
+            @Override
+            public void saveProgress(int level, int score, int magic) {
+                savePlayerProgress(level, score, magic);
+            }
         });
         root.addView(gameView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -62,7 +93,21 @@ public class MainActivity extends Activity {
         setContentView(root);
         new Thread(() -> MobileAds.initialize(this, initializationStatus -> {})).start();
         bannerAd.loadAd(new AdRequest.Builder().build());
+        applySignedInAccount(GoogleSignIn.getLastSignedInAccount(this));
         hideSystemBars();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == RC_GOOGLE_SIGN_IN) {
+            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+            try {
+                applySignedInAccount(task.getResult(ApiException.class));
+            } catch (ApiException e) {
+                if (gameView != null) gameView.showSignInMessage("Google sign-in cancelled. Guest progress is still playable.");
+            }
+        }
     }
 
     @Override
@@ -95,6 +140,36 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void applySignedInAccount(GoogleSignInAccount account) {
+        if (account == null) {
+            accountKey = "guest";
+            playerName = "Guest";
+        } else {
+            accountKey = account.getId() != null ? account.getId() : String.valueOf(account.getEmail()).toLowerCase(Locale.US);
+            playerName = account.getDisplayName() != null ? account.getDisplayName() : account.getEmail();
+            if (playerName == null || playerName.trim().isEmpty()) playerName = "Player";
+        }
+        SavedProgress progress = loadPlayerProgress();
+        if (gameView != null) gameView.setSignedInPlayer(playerName, !"guest".equals(accountKey), progress);
+    }
+
+    private SavedProgress loadPlayerProgress() {
+        String prefix = accountKey + ".";
+        return new SavedProgress(
+                progressPrefs.getInt(prefix + "level", 1),
+                progressPrefs.getInt(prefix + "score", 0),
+                progressPrefs.getInt(prefix + "magic", 0));
+    }
+
+    private void savePlayerProgress(int level, int score, int magic) {
+        String prefix = accountKey + ".";
+        progressPrefs.edit()
+                .putInt(prefix + "level", Math.max(1, Math.min(KajakajaView.TOTAL_LEVELS, level)))
+                .putInt(prefix + "score", Math.max(0, score))
+                .putInt(prefix + "magic", Math.max(0, magic))
+                .apply();
+    }
+
     static final class KajakajaView extends View {
         private static final int MODE_TITLE = 0;
         private static final int MODE_PLAY = 1;
@@ -106,7 +181,7 @@ public class MainActivity extends Activity {
         private static final int ROWS = 9;
         private static final int EMPTY = -1;
         private static final int OBSTACLE = 5;
-        private static final int TOTAL_LEVELS = 10;
+        static final int TOTAL_LEVELS = 10;
 
         private static final LevelSpec[] LEVELS = new LevelSpec[]{
                 new LevelSpec("Spike Wall Rescue", "The spike wall", 0, 1, 12, 7, 19, 3,
@@ -141,7 +216,9 @@ public class MainActivity extends Activity {
         private final Bitmap openingArt;
 
         private GameStateListener gameStateListener;
+        private AccountListener accountListener;
         private boolean lastRunningState;
+        private boolean signedIn = false;
         private int mode = MODE_TITLE;
         private int level = 1;
         private int score = 0;
@@ -164,6 +241,8 @@ public class MainActivity extends Activity {
         private long lastFrame;
         private String message = "";
         private String failure = "The trap caught kajakaja";
+        private String playerName = "Guest";
+        private String signInMessage = "Sign in with Google to save your level.";
 
         KajakajaView(Activity activity) {
             super(activity);
@@ -175,6 +254,29 @@ public class MainActivity extends Activity {
         void setGameStateListener(GameStateListener listener) {
             gameStateListener = listener;
             notifyGameState();
+        }
+
+        void setAccountListener(AccountListener listener) {
+            accountListener = listener;
+        }
+
+        void setSignedInPlayer(String name, boolean isSignedIn, SavedProgress progress) {
+            playerName = name == null || name.trim().isEmpty() ? "Player" : name;
+            signedIn = isSignedIn;
+            if (progress != null) {
+                level = Math.max(1, Math.min(TOTAL_LEVELS, progress.level));
+                score = Math.max(0, progress.score);
+                magic = Math.max(0, progress.magic);
+                signInMessage = signedIn
+                        ? "Signed in as " + playerName + ". Saved level " + level + " loaded."
+                        : "Guest mode. Sign in with Google to save your level.";
+                message = signInMessage;
+            }
+        }
+
+        void showSignInMessage(String msg) {
+            signInMessage = msg;
+            message = msg;
         }
 
         @Override
@@ -215,6 +317,11 @@ public class MainActivity extends Activity {
             level = 1;
             score = 0;
             magic = 0;
+            saveProgress();
+            setupStage();
+        }
+
+        private void resumeGame() {
             setupStage();
         }
 
@@ -238,6 +345,7 @@ public class MainActivity extends Activity {
             need[spec.secondaryColor][0] = spec.secondaryGoal;
             buildBoard();
             computeHint();
+            saveProgress();
         }
 
         private void nextLevel() {
@@ -282,7 +390,11 @@ public class MainActivity extends Activity {
                 downX = e.getX();
                 downY = e.getY();
                 if (mode == MODE_TITLE) {
-                    startGame();
+                    if (inGoogleButton(e.getX(), e.getY())) {
+                        if (accountListener != null) accountListener.requestGoogleSignIn();
+                    } else {
+                        resumeGame();
+                    }
                     return true;
                 }
                 if (mode == MODE_OVER) {
@@ -346,6 +458,7 @@ public class MainActivity extends Activity {
             message = cluster.size() >= 6 ? "HD combo! Path bridge opens faster." : "Good move. The escape path is forming.";
             computeHint();
             checkWinLoss();
+            if (mode == MODE_PLAY) saveProgress();
         }
 
         private void useAiMove() {
@@ -379,6 +492,7 @@ public class MainActivity extends Activity {
             message = "Magic broke traps and revealed the route";
             computeHint();
             checkWinLoss();
+            if (mode == MODE_PLAY) saveProgress();
         }
 
         private void checkWinLoss() {
@@ -388,6 +502,7 @@ public class MainActivity extends Activity {
                     score += 2500;
                     magic += 2;
                     message = "All 10 rescue rooms cleared.";
+                    saveProgress();
                     return;
                 }
                 mode = MODE_CLEAR;
@@ -395,6 +510,7 @@ public class MainActivity extends Activity {
                 score += 1100 + level * 160;
                 magic++;
                 message = "Stage rescued. Magic reward earned.";
+                saveProgressForNextLevel();
                 return;
             }
             checkLoss();
@@ -409,6 +525,16 @@ public class MainActivity extends Activity {
             danger = 1f;
             shake = 0.7f;
             mode = MODE_OVER;
+            saveProgress();
+        }
+
+        private void saveProgress() {
+            if (accountListener != null) accountListener.saveProgress(level, score, magic);
+        }
+
+        private void saveProgressForNextLevel() {
+            int saveLevel = Math.min(TOTAL_LEVELS, level + 1);
+            if (accountListener != null) accountListener.saveProgress(saveLevel, score, magic);
         }
 
         private boolean requirementsMet() {
@@ -923,6 +1049,9 @@ public class MainActivity extends Activity {
             text.setTextSize(20f);
             text.setColor(Color.WHITE);
             c.drawText(objectiveText(), 38, h * 0.19f, text);
+            text.setTextSize(17f);
+            text.setColor(Color.rgb(225, 242, 255));
+            c.drawText((signedIn ? "Google save: " : "Guest: ") + playerName, 38, h * 0.214f, text);
             drawNeed(c, w, h);
             drawButton(c, aiRect(w, h), "AI MOVE", Color.rgb(76, 207, 255));
             drawButton(c, magicRect(w, h), "MAGIC", Color.rgb(255, 194, 64));
@@ -933,7 +1062,7 @@ public class MainActivity extends Activity {
 
         private void drawNeed(Canvas c, int w, int h) {
             float x = 38;
-            float y = h * 0.213f;
+            float y = h * 0.238f;
             for (int i = 0; i < 4; i++) {
                 if (need[i][0] <= 0) continue;
                 p.setColor(tileColor(i));
@@ -996,8 +1125,38 @@ public class MainActivity extends Activity {
             text.setTextSize(25f);
             c.drawText("HD rescue puzzle adventure", w / 2f, h * 0.31f, text);
             c.drawText("10 trap rooms, animated paths, AI moves and magic.", w / 2f, h * 0.39f, text);
+            text.setTextSize(22f);
+            c.drawText(signInMessage, w / 2f, h * 0.49f, text);
+            drawGoogleButton(c, googleRect(w, h));
             text.setTextSize(32f);
             c.drawText("Tap to play", w / 2f, h * 0.70f, text);
+            text.setTextAlign(Paint.Align.LEFT);
+        }
+
+        private void drawGoogleButton(Canvas c, RectF rect) {
+            p.setColor(Color.argb(140, 0, 0, 0));
+            c.drawRoundRect(new RectF(rect.left + 4, rect.top + 6, rect.right + 4, rect.bottom + 7), 18, 18, p);
+            p.setColor(Color.WHITE);
+            c.drawRoundRect(rect, 18, 18, p);
+            float gx = rect.left + 34;
+            float gy = rect.centerY();
+            p.setStrokeWidth(6f);
+            p.setStyle(Paint.Style.STROKE);
+            p.setColor(Color.rgb(66, 133, 244));
+            c.drawArc(new RectF(gx - 14, gy - 14, gx + 14, gy + 14), -35, 210, false, p);
+            p.setColor(Color.rgb(52, 168, 83));
+            c.drawArc(new RectF(gx - 14, gy - 14, gx + 14, gy + 14), 145, 75, false, p);
+            p.setColor(Color.rgb(251, 188, 5));
+            c.drawArc(new RectF(gx - 14, gy - 14, gx + 14, gy + 14), 220, 65, false, p);
+            p.setColor(Color.rgb(234, 67, 53));
+            c.drawArc(new RectF(gx - 14, gy - 14, gx + 14, gy + 14), 285, 40, false, p);
+            p.setStyle(Paint.Style.FILL);
+            p.setStrokeWidth(1f);
+            p.setColor(Color.rgb(55, 62, 76));
+            text.setTextAlign(Paint.Align.CENTER);
+            text.setTextSize(21f);
+            text.setColor(Color.rgb(45, 45, 48));
+            c.drawText(signedIn ? "Signed in with Google" : "Sign in with Google", rect.centerX() + 14, rect.centerY() + 8, text);
             text.setTextAlign(Paint.Align.LEFT);
         }
 
@@ -1014,11 +1173,15 @@ public class MainActivity extends Activity {
         }
 
         private RectF aiRect(int w, int h) {
-            return new RectF(w - 182, h * 0.204f, w - 30, h * 0.254f);
+            return new RectF(w - 182, h * 0.225f, w - 30, h * 0.273f);
         }
 
         private RectF magicRect(int w, int h) {
-            return new RectF(w - 182, h * 0.265f, w - 30, h * 0.315f);
+            return new RectF(w - 182, h * 0.286f, w - 30, h * 0.334f);
+        }
+
+        private RectF googleRect(int w, int h) {
+            return new RectF(w * 0.16f, h * 0.535f, w * 0.84f, h * 0.595f);
         }
 
         private boolean inAiButton(float x, float y) {
@@ -1027,6 +1190,10 @@ public class MainActivity extends Activity {
 
         private boolean inMagicButton(float x, float y) {
             return magicRect(getWidth(), getHeight()).contains(x, y);
+        }
+
+        private boolean inGoogleButton(float x, float y) {
+            return googleRect(getWidth(), getHeight()).contains(x, y);
         }
 
         private int tileColor(int color) {
@@ -1139,6 +1306,24 @@ public class MainActivity extends Activity {
 
         interface GameStateListener {
             void onRunningStateChanged(boolean isRunning);
+        }
+
+        interface AccountListener {
+            void requestGoogleSignIn();
+
+            void saveProgress(int level, int score, int magic);
+        }
+    }
+
+    static final class SavedProgress {
+        final int level;
+        final int score;
+        final int magic;
+
+        SavedProgress(int level, int score, int magic) {
+            this.level = level;
+            this.score = score;
+            this.magic = magic;
         }
     }
 }
